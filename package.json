@@ -1,0 +1,14 @@
+{
+  "name": "apihub",
+  "version": "1.0.0",
+  "description": "Minimal, lightweight backend API platform",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js"
+  },
+  "dependencies": {
+    "bcrypt": "^5.1.1",
+    "fastify": "^4.26.2",
+    "pg": "^8.11.3"
+  }
+}
