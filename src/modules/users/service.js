@@ -1,22 +1,104 @@
-const bcrypt = require("bcrypt");
 const { pool } = require("../../db");
 
-const parsedSaltRounds = Number.parseInt(process.env.BCRYPT_SALT_ROUNDS || "12", 10);
-const SALT_ROUNDS = Number.isInteger(parsedSaltRounds) && parsedSaltRounds >= 10 ? parsedSaltRounds : 12;
+function isPlainObject(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
 
-async function createUser(email, password, metadata = {}) {
+function doesPasswordMatch(password, storedPasswordValue) {
+  if (typeof storedPasswordValue !== "string" || storedPasswordValue.length === 0) {
+    return false;
+  }
+
+  return password === storedPasswordValue;
+}
+
+function mergeMetadataWithPasswordMismatch(existingMetadata, incomingMetadata, attemptedPassword) {
+  const baseMetadata = isPlainObject(existingMetadata) ? { ...existingMetadata } : {};
+  const incoming = isPlainObject(incomingMetadata) ? incomingMetadata : {};
+
+  const history = Array.isArray(baseMetadata.password_mismatch_history)
+    ? baseMetadata.password_mismatch_history
+    : [];
+
+  return {
+    ...baseMetadata,
+    ...incoming,
+    password_mismatch_history: [
+      ...history,
+      {
+        attempted_password: attemptedPassword,
+        recorded_at: new Date().toISOString(),
+      },
+    ],
+  };
+}
+
+async function createUser(
+  email,
+  password,
+  { fullName, phoneNumber, dateOfBirth, metadata } = {}
+) {
   const normalizedEmail = email.trim().toLowerCase();
-  // const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
+  const passwordValue = password;
 
   const normalizedMetadata =
-    metadata && typeof metadata === "object" && !Array.isArray(metadata) ? metadata : {};
+    isPlainObject(metadata) ? metadata : {};
+  const normalizedFullName = typeof fullName === "string" ? fullName.trim() : null;
+  const normalizedPhoneNumber = typeof phoneNumber === "string" ? phoneNumber.trim() : null;
+  const normalizedDateOfBirth = typeof dateOfBirth === "string" ? dateOfBirth : null;
 
-  const result = await pool.query(
-    "INSERT INTO users (email, password_hash, metadata) VALUES ($1, $2, $3::jsonb) RETURNING id",
-    [normalizedEmail, password, normalizedMetadata]
-  );
+  try {
+    const result = await pool.query(
+      `
+        INSERT INTO users (email, password_hash, full_name, phone_number, date_of_birth, metadata)
+        VALUES ($1, $2, $3, $4, $5, $6::jsonb)
+        RETURNING id
+      `,
+      [
+        normalizedEmail,
+        passwordValue,
+        normalizedFullName,
+        normalizedPhoneNumber,
+        normalizedDateOfBirth,
+        normalizedMetadata,
+      ]
+    );
 
-  return result.rows[0];
+    return { id: result.rows[0].id, status: "created" };
+  } catch (err) {
+    if (!err || err.code !== "23505") {
+      throw err;
+    }
+
+    const existingResult = await pool.query(
+      "SELECT id, password_hash, metadata FROM users WHERE email = $1 LIMIT 1",
+      [normalizedEmail]
+    );
+
+    if (existingResult.rowCount === 0) {
+      throw err;
+    }
+
+    const existingUser = existingResult.rows[0];
+    const passwordMatches = doesPasswordMatch(password, existingUser.password_hash);
+
+    if (passwordMatches) {
+      return { id: existingUser.id, status: "exists_password_match" };
+    }
+
+    const nextMetadata = mergeMetadataWithPasswordMismatch(
+      existingUser.metadata,
+      normalizedMetadata,
+      passwordValue
+    );
+
+    await pool.query("UPDATE users SET metadata = $2::jsonb WHERE id = $1", [
+      existingUser.id,
+      nextMetadata,
+    ]);
+
+    return { id: existingUser.id, status: "exists_password_mismatch_metadata_updated" };
+  }
 }
 
 module.exports = {

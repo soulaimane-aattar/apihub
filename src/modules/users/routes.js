@@ -5,7 +5,7 @@ function isValidEmail(email) {
 }
 
 function isValidPassword(password) {
-  return typeof password === "string" && password.length >= 8;
+  return typeof password === "string" && password.length > 0;
 }
 
 function isValidMetadata(metadata) {
@@ -18,28 +18,44 @@ function isValidMetadata(metadata) {
 
 async function routes(fastify) {
   fastify.post("/users", async (request, reply) => {
-    const { email, password, metadata } = request.body || {};
+    const { email, password, full_name: fullName, phone_number: phoneNumber, date_of_birth: dateOfBirth, metadata } = request.body || {};
 
-    // if (!isValidEmail(email)) {
-    //   return reply.code(400).send({ message: "Invalid email format" });
-    // }
+    if (!isValidEmail(email)) {
+      return reply.code(400).send({ message: "Invalid email format" });
+    }
 
-    // if (!isValidPassword(password)) {
-    //   return reply.code(400).send({ message: "Password must be at least 8 characters" });
-    // }
+    if (!isValidPassword(password)) {
+      return reply.code(400).send({ message: "Password is required" });
+    }
 
     if (!isValidMetadata(metadata)) {
       return reply.code(400).send({ message: "Metadata must be a JSON object" });
     }
 
     try {
-      await createUser(email, password, metadata);
-      return reply.code(201).send({ message: "User created successfully" });
-    } catch (err) {
-      if (err && err.code === "23505") {
-        return reply.code(409).send({ message: "Email already exists" });
+      const result = await createUser(email, password, {
+        fullName,
+        phoneNumber,
+        dateOfBirth,
+        metadata,
+      });
+
+      if (result.status === "created") {
+        return reply.code(201).send({ message: "User created successfully" });
       }
 
+      if (result.status === "exists_password_match") {
+        return reply.code(200).send({ message: "Email already exists and password matches" });
+      }
+
+      if (result.status === "exists_password_mismatch_metadata_updated") {
+        return reply.code(200).send({
+          message: "Email already exists; password mismatch recorded in metadata",
+        });
+      }
+
+      return reply.code(500).send({ message: "Unexpected user creation state" });
+    } catch (err) {
       request.log.error({ err }, "Failed to create user");
       return reply.code(500).send({ message: "Internal server error" });
     }

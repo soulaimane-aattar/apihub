@@ -1,4 +1,4 @@
-.PHONY: up dev down down-dev build rebuild logs ps dbshell
+.PHONY: up dev down down-dev build rebuild logs ps dbshell migrate migrate-dev
 
 COMPOSE_DEV=docker compose -f docker-compose.dev.yaml
 COMPOSE_PROD=docker compose -f docker-compose.yml
@@ -29,3 +29,11 @@ ps:
 
 dbshell:
 	$(COMPOSE_PROD) exec db psql -U apihub -d apihub
+
+migrate:
+	$(COMPOSE_PROD) up -d db
+	$(COMPOSE_PROD) run --rm --build api npm run migrate:deploy
+
+migrate-dev:
+	$(COMPOSE_DEV) up -d db
+	$(COMPOSE_DEV) run --rm --build api npm run migrate:deploy

@@ -1,5 +1,4 @@
 const { Pool } = require("pg");
-const { applyFileMigrations } = require("./db/migrator");
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -31,16 +30,10 @@ async function initDatabase(
 
     try {
       client = await pool.connect();
-      await client.query("BEGIN");
-      await applyFileMigrations(client, { logger });
-      await client.query("COMMIT");
+      await client.query("SELECT 1");
       return;
     } catch (err) {
       lastError = err;
-
-      if (client) {
-        await client.query("ROLLBACK").catch(() => {});
-      }
 
       if (attempt < maxRetries) {
         if (logger) {

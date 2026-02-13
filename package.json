@@ -4,11 +4,15 @@
   "description": "Minimal, lightweight backend API platform",
   "main": "src/server.js",
   "scripts": {
-    "start": "node src/server.js"
+    "start": "node src/server.js",
+    "migrate:deploy": "prisma migrate deploy",
+    "migrate:dev": "prisma migrate dev",
+    "prisma:generate": "prisma generate"
   },
   "dependencies": {
-    "bcrypt": "^5.1.1",
+    "@prisma/client": "^5.22.0",
     "fastify": "^4.26.2",
-    "pg": "^8.11.3"
+    "pg": "^8.11.3",
+    "prisma": "^5.22.0"
   }
 }
