@@ -1,0 +1,27 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            BigInt    @id @default(autoincrement()) @db.BigInt
+  email         String    @unique
+  passwordHash  String    @map("password_hash")
+  fullName      String?   @map("full_name")
+  phoneNumber   String?   @map("phone_number")
+  dateOfBirth   DateTime? @map("date_of_birth") @db.Date
+  avatarUrl     String?   @map("avatar_url")
+  metadata      Json      @default(dbgenerated("'{}'::jsonb")) @db.JsonB
+  isActive      Boolean   @default(true) @map("is_active")
+  emailVerified DateTime? @map("email_verified_at") @db.Timestamptz(6)
+  lastLoginAt   DateTime? @map("last_login_at") @db.Timestamptz(6)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@index([createdAt], map: "idx_users_created_at")
+  @@map("users")
+}
