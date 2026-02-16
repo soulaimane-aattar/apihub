@@ -4,6 +4,15 @@ function isPlainObject(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
+function normalizeOptionalText(value) {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const normalizedValue = value.trim();
+  return normalizedValue.length > 0 ? normalizedValue : null;
+}
+
 function doesPasswordMatch(password, storedPasswordValue) {
   if (typeof storedPasswordValue !== "string" || storedPasswordValue.length === 0) {
     return false;
@@ -33,6 +42,41 @@ function mergeMetadataWithPasswordMismatch(existingMetadata, incomingMetadata, a
   };
 }
 
+async function backfillMissingProfileFields(
+  userId,
+  { fullName, phoneNumber, dateOfBirth } = {}
+) {
+  if (!fullName && !phoneNumber && !dateOfBirth) {
+    return;
+  }
+
+  await pool.query(
+    `
+      UPDATE users
+      SET
+        full_name = CASE
+          WHEN (full_name IS NULL OR BTRIM(full_name) = '') AND $2::text IS NOT NULL THEN $2::text
+          ELSE full_name
+        END,
+        phone_number = CASE
+          WHEN (phone_number IS NULL OR BTRIM(phone_number) = '') AND $3::text IS NOT NULL THEN $3::text
+          ELSE phone_number
+        END,
+        date_of_birth = CASE
+          WHEN date_of_birth IS NULL AND $4::date IS NOT NULL THEN $4::date
+          ELSE date_of_birth
+        END
+      WHERE id = $1
+        AND (
+          ((full_name IS NULL OR BTRIM(full_name) = '') AND $2::text IS NOT NULL)
+          OR ((phone_number IS NULL OR BTRIM(phone_number) = '') AND $3::text IS NOT NULL)
+          OR (date_of_birth IS NULL AND $4::date IS NOT NULL)
+        )
+    `,
+    [userId, fullName, phoneNumber, dateOfBirth]
+  );
+}
+
 async function createUser(
   email,
   password,
@@ -43,9 +87,9 @@ async function createUser(
 
   const normalizedMetadata =
     isPlainObject(metadata) ? metadata : {};
-  const normalizedFullName = typeof fullName === "string" ? fullName.trim() : null;
-  const normalizedPhoneNumber = typeof phoneNumber === "string" ? phoneNumber.trim() : null;
-  const normalizedDateOfBirth = typeof dateOfBirth === "string" ? dateOfBirth : null;
+  const normalizedFullName = normalizeOptionalText(fullName);
+  const normalizedPhoneNumber = normalizeOptionalText(phoneNumber);
+  const normalizedDateOfBirth = normalizeOptionalText(dateOfBirth);
 
   try {
     const result = await pool.query(
@@ -80,6 +124,12 @@ async function createUser(
     }
 
     const existingUser = existingResult.rows[0];
+    await backfillMissingProfileFields(existingUser.id, {
+      fullName: normalizedFullName,
+      phoneNumber: normalizedPhoneNumber,
+      dateOfBirth: normalizedDateOfBirth,
+    });
+
     const passwordMatches = doesPasswordMatch(password, existingUser.password_hash);
 
     if (passwordMatches) {

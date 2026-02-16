@@ -74,6 +74,10 @@ Responses:
 
 `full_name`, `phone_number`, `date_of_birth`, and `metadata` are optional.
 
+When email already exists, the API backfills missing profile fields on that existing user
+(`full_name`, `phone_number`, `date_of_birth`) using non-empty values from the incoming request.
+Existing non-empty profile values are not overwritten.
+
 `metadata` must be a JSON object when provided.
 
 When email already exists and password does not match, the API appends a password mismatch entry

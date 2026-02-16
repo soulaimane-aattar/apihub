@@ -10,7 +10,7 @@
       "name": "Users",
       "item": [
         {
-          "name": "Create User - Success",
+          "name": "Create User - Success (With Profile Fields)",
           "event": [
             {
               "listen": "test",
@@ -40,7 +40,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"{{$randomEmail}}\",\n  \"password\": \"password123\",\n  \"metadata\": {\n    \"role\": \"member\",\n    \"signupSource\": \"postman\"\n  }\n}"
+              "raw": "{\n  \"email\": \"{{$randomEmail}}\",\n  \"password\": \"password123\",\n  \"full_name\": \"John Doe\",\n  \"phone_number\": \"+12025550123\",\n  \"date_of_birth\": \"1990-08-15\",\n  \"metadata\": {\n    \"role\": \"member\",\n    \"signupSource\": \"postman\"\n  }\n}"
             },
             "url": "{{baseUrl}}/api/users",
             "description": "Creates a new user with a randomized email."
@@ -85,7 +85,7 @@
           "response": []
         },
         {
-          "name": "Create User - Short Password (400)",
+          "name": "Create User - Missing Password (400)",
           "event": [
             {
               "listen": "test",
@@ -96,9 +96,41 @@
                   "  pm.response.to.have.status(400);",
                   "});",
                   "",
-                  "pm.test(\"Validation message is correct\", function () {",
+                  "pm.test(\"Password required message is correct\", function () {",
                   "  const json = pm.response.json();",
-                  "  pm.expect(json.message).to.eql(\"Password must be at least 8 characters\");",
+                  "  pm.expect(json.message).to.eql(\"Password is required\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"missing-password@example.com\"\n}"
+            },
+            "url": "{{baseUrl}}/api/users"
+          },
+          "response": []
+        },
+        {
+          "name": "Create User - Short Password Allowed",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 201 or 200\", function () {",
+                  "  pm.expect([201, 200]).to.include(pm.response.code);",
                   "});"
                 ]
               }
@@ -140,8 +172,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"Status code is 201 or 409\", function () {",
-                  "  pm.expect([201, 409]).to.include(pm.response.code);",
+                  "pm.test(\"Status code is 201 or 200\", function () {",
+                  "  pm.expect([201, 200]).to.include(pm.response.code);",
                   "});"
                 ]
               }
@@ -166,7 +198,7 @@
           "response": []
         },
         {
-          "name": "Create User - Duplicate Email (409)",
+          "name": "Create User - Duplicate Email + Matching Password",
           "event": [
             {
               "listen": "prerequest",
@@ -184,13 +216,13 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"Status code is 409\", function () {",
-                  "  pm.response.to.have.status(409);",
+                  "pm.test(\"Status code is 200\", function () {",
+                  "  pm.response.to.have.status(200);",
                   "});",
                   "",
-                  "pm.test(\"Duplicate message is correct\", function () {",
+                  "pm.test(\"Duplicate match message is correct\", function () {",
                   "  const json = pm.response.json();",
-                  "  pm.expect(json.message).to.eql(\"Email already exists\");",
+                  "  pm.expect(json.message).to.eql(\"Email already exists and password matches\");",
                   "});"
                 ]
               }
@@ -208,6 +240,54 @@
             "body": {
               "mode": "raw",
               "raw": "{\n  \"email\": \"{{duplicateEmail}}\",\n  \"password\": \"password123\"\n}"
+            },
+            "url": "{{baseUrl}}/api/users"
+          },
+          "response": []
+        },
+        {
+          "name": "Create User - Duplicate Email + Different Password",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.collectionVariables.get(\"duplicateEmail\")) {",
+                  "  pm.collectionVariables.set(\"duplicateEmail\", `duplicate.${Date.now()}@example.com`);",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Mismatch metadata message is correct\", function () {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.message).to.eql(\"Email already exists; password mismatch recorded in metadata\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{duplicateEmail}}\",\n  \"password\": \"different-password-999\",\n  \"metadata\": {\n    \"source\": \"postman-mismatch-test\"\n  }\n}"
             },
             "url": "{{baseUrl}}/api/users"
           },
