@@ -47,10 +47,10 @@ async function backfillMissingProfileFields(
   { fullName, phoneNumber, dateOfBirth } = {}
 ) {
   if (!fullName && !phoneNumber && !dateOfBirth) {
-    return;
+    return false;
   }
 
-  await pool.query(
+  const result = await pool.query(
     `
       UPDATE users
       SET
@@ -75,6 +75,8 @@ async function backfillMissingProfileFields(
     `,
     [userId, fullName, phoneNumber, dateOfBirth]
   );
+
+  return result.rowCount > 0;
 }
 
 async function createUser(
@@ -124,7 +126,7 @@ async function createUser(
     }
 
     const existingUser = existingResult.rows[0];
-    await backfillMissingProfileFields(existingUser.id, {
+    const didBackfillProfile = await backfillMissingProfileFields(existingUser.id, {
       fullName: normalizedFullName,
       phoneNumber: normalizedPhoneNumber,
       dateOfBirth: normalizedDateOfBirth,
@@ -134,6 +136,10 @@ async function createUser(
 
     if (passwordMatches) {
       return { id: existingUser.id, status: "exists_password_match" };
+    }
+
+    if (!didBackfillProfile) {
+      return { id: existingUser.id, status: "exists_password_mismatch_no_profile_update" };
     }
 
     const nextMetadata = mergeMetadataWithPasswordMismatch(

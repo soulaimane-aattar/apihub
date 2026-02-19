@@ -18,7 +18,14 @@ function isValidMetadata(metadata) {
 
 async function routes(fastify) {
   fastify.post("/users", async (request, reply) => {
-    const { email, password, full_name: fullName, phone_number: phoneNumber, date_of_birth: dateOfBirth, metadata } = request.body || {};
+    const {
+      email,
+      password,
+      full_name: fullName,
+      phone_number: phoneNumber,
+      date_of_birth: dateOfBirth,
+      metadata,
+    } = request.body || {};
 
     if (!isValidEmail(email)) {
       return reply.code(400).send({ message: "Invalid email format" });
@@ -51,6 +58,12 @@ async function routes(fastify) {
       if (result.status === "exists_password_mismatch_metadata_updated") {
         return reply.code(200).send({
           message: "Email already exists; password mismatch recorded in metadata",
+        });
+      }
+
+      if (result.status === "exists_password_mismatch_no_profile_update") {
+        return reply.code(200).send({
+          message: "Email already exists; profile is already filled so no update was applied",
         });
       }
 
